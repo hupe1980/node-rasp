@@ -5,7 +5,7 @@
 ## How to use
 ```typescript
 import * as fs from 'fs';
-import { Mode, RASP, Trace } from './rasp';
+import { Mode, RASP, Trace } from 'node-rasp';
 
 RASP.configure({
   mode: Mode.Block,
