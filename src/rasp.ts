@@ -18,6 +18,8 @@ export interface Ignore {
   readonly method: string;
 }
 
+export const ReadFileIgnores = [{ module: 'fs', method: 'readFile' }, { module: 'fs', method: 'readFileSync' }];
+
 export interface Configuration {
   readonly mode?: Mode;
   readonly allowRead?: string[];
