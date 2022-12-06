@@ -1,10 +1,11 @@
 # node-rasp
+> Simple nodejs rasp solution
 
 :warning: This is experimental and subject to breaking changes.
 
 ## How to use
 ```typescript
-import * as fs from 'fs';
+import fs from 'fs';
 import { Mode, RASP, Trace } from 'node-rasp';
 
 RASP.configure({

@@ -149,7 +149,6 @@ export class RASP {
   }
 }
 
-
 export enum Mode {
   BLOCK = 'block',
   ALERT = 'alert',
