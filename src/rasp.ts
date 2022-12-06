@@ -25,7 +25,7 @@ export interface Configuration {
   readonly allowRead?: string[];
   readonly allowWrite?: string[];
   //readonly allowRun?: string[]; TODO
-  //readonly allowNet?: string[]; TODO
+  readonly allowNet?: string[];
   readonly ignores?: Ignore[];
   readonly reporter: (trace: Trace) => void;
 }
@@ -100,17 +100,15 @@ export class RASP {
         return func.call(this, ...args);
       }
 
-      if (this.config.reporter) {
-        const trace: Trace = {
-          module,
-          method,
-          blocked: this.config.mode === Mode.BLOCK,
-          args: args.map(stringify),
-          stackTrace: new Error().stack?.split('\n').slice(1).map(s => s.trim()),
-        };
+      const trace: Trace = {
+        module,
+        method,
+        blocked: this.config.mode === Mode.BLOCK,
+        args: args.map(stringify),
+        stackTrace: new Error().stack?.split('\n').slice(1).map(s => s.trim()),
+      };
 
-        this.config.reporter(trace);
-      }
+      this.config.reporter(trace);
 
       if (this.config.mode === Mode.ALERT) {
         return func.call(this, ...args);
@@ -133,7 +131,7 @@ export class RASP {
     });
   }
 
-  private isAllowed(module: string, method: string, ...args: any): boolean {
+  private isAllowed(module: string, method: string, args: any): boolean {
     if (module === 'fs') {
       if (method === 'readFile' || method === 'readFileSync' || method === 'readdir' || method === 'readdirSync') {
         if (!this.config.allowRead) return false;
@@ -142,6 +140,9 @@ export class RASP {
         if (!this.config.allowWrite) return false;
         return this.config.allowWrite.some(item => matchRule(args[0], item));
       }
+    } else if (module === 'dns') {
+      if (!this.config.allowNet) return false;
+      return this.config.allowNet.some(item => matchRule(args[0], item));
     }
 
     return false;
