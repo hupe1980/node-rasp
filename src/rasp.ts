@@ -22,6 +22,8 @@ export interface Configuration {
   readonly mode?: Mode;
   readonly allowRead?: string[];
   readonly allowWrite?: string[];
+  //readonly allowRun?: string[]; TODO
+  //readonly allowNet?: string[]; TODO
   readonly ignores?: Ignore[];
   readonly reporter: (trace: Trace) => void;
 }
