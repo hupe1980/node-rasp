@@ -57,6 +57,23 @@ export class RASP {
     });
   }
 
+  public isAllowed(module: string, method: string, args: any): boolean {
+    switch (module) {
+      case 'fs':
+        return this.engine.isFsMethodAllowed(method, args);
+      case 'dns':
+        return this.engine.isDnsMethodAllowed(method, args);
+      case 'child_process':
+        return this.engine.isChildProcessMethodAllowed(method, args);
+      case 'net':
+        return this.engine.isNetMethodAllowed(method, args);
+      case 'http':
+        return this.engine.isHttpMethodAllowed(method, args);
+      default:
+        return false;
+    }
+  }
+
   private proxifyChildProcess() {
     child_process.spawn = new Proxy(child_process.spawn, this.createHandler<typeof child_process.spawn>('child_process', 'spawn'));
     child_process.spawnSync = new Proxy(child_process.spawnSync, this.createHandler<typeof child_process.spawnSync>('child_process', 'spawnSync'));
@@ -169,23 +186,6 @@ export class RASP {
       messageType: 'trace',
       data: trace,
     };
-  }
-
-  private isAllowed(module: string, method: string, args: any): boolean {
-    switch (module) {
-      case 'fs':
-        return this.engine.isFsMethodAllowed(method, args);
-      case 'dns':
-        return this.engine.isDnsMethodAllowed(method, args);
-      case 'child_process':
-        return this.engine.isChildProcessMethodAllowed(method, args);
-      case 'net':
-        return this.engine.isNetMethodAllowed(method, args);
-      case 'http':
-        return this.engine.isHttpMethodAllowed(method, args);
-      default:
-        return false;
-    }
   }
 }
 
