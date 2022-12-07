@@ -43,8 +43,8 @@ export class RASP {
     return rasp;
   }
 
-  public readonly config: Configuration;
-  public readonly engine: Engine;
+  private readonly config: Configuration;
+  private readonly engine: Engine;
 
   private constructor(config: Configuration) {
     this.config = {
@@ -103,29 +103,26 @@ export class RASP {
     const handler:ProxyHandler<NodeJS.ProcessEnv> = {
       get(target, prop, receiver) {
         if (that.config.mode === Mode.ALLOW || that.engine.isApiAllowed('process', 'env') || that.engine.isEnvAllowed(String(prop))) {
-          console.log('YYYY', String(prop));
           return Reflect.get(target, prop, receiver);
         }
 
-        const trace: Trace = {
-          module: 'process',
-          method: 'env',
-          blocked: that.config.mode === Mode.BLOCK,
-          args: [String(prop)],
-          stackTrace: new Error().stack?.split('\n').slice(1).map(s => s.trim()),
-        };
-
-        that.config.reporter({
-          pid: process.pid,
-          runtime: 'node.js',
-          runtimeVersion: process.version,
-          time: Date.now(),
-          messageType: 'trace',
-          data: trace,
-        });
+        that.config.reporter(that.createMessage('process', 'env', [String(prop)]));
 
         if (that.config.mode === Mode.ALERT) {
           return Reflect.get(target, prop, receiver);
+        }
+
+        throw new Error('Environment access blocked by RASP');
+      },
+      set(target, prop, val, receiver) {
+        if (that.config.mode === Mode.ALLOW || that.engine.isApiAllowed('process', 'env') || that.engine.isEnvAllowed(String(prop))) {
+          return Reflect.set(target, prop, val, receiver);
+        }
+
+        that.config.reporter(that.createMessage('process', 'env', [String(prop), val]));
+
+        if (that.config.mode === Mode.ALERT) {
+          return Reflect.set(target, prop, val, receiver);
         }
 
         throw new Error('Environment access blocked by RASP');
@@ -141,32 +138,36 @@ export class RASP {
     return {
       apply(target, thisArg, args) {
         if (that.config.mode === Mode.ALLOW || that.engine.isApiAllowed(module, method) || that.isAllowed(module, method, args)) {
-          return target.apply(thisArg, args);
+          return Reflect.apply(target, thisArg, args);
         }
 
-        const trace: Trace = {
-          module,
-          method,
-          blocked: that.config.mode === Mode.BLOCK,
-          args: args.map(stringify),
-          stackTrace: new Error().stack?.split('\n').slice(1).map(s => s.trim()),
-        };
-
-        that.config.reporter({
-          pid: process.pid,
-          runtime: 'node.js',
-          runtimeVersion: process.version,
-          time: Date.now(),
-          messageType: 'trace',
-          data: trace,
-        });
+        that.config.reporter(that.createMessage(module, method, args.map(stringify)));
 
         if (that.config.mode === Mode.ALERT) {
-          return target.apply(thisArg, args);
+          return Reflect.apply(target, thisArg, args);
         }
 
         throw new Error('API blocked by RASP');
       },
+    };
+  }
+
+  private createMessage(module: string, method: string, args: string[]): Message {
+    const trace: Trace = {
+      module,
+      method,
+      blocked: this.config.mode === Mode.BLOCK,
+      args: args,
+      stackTrace: new Error().stack?.split('\n').slice(1).map(s => s.trim()),
+    };
+
+    return {
+      pid: process.pid,
+      runtime: 'node.js',
+      runtimeVersion: process.version,
+      time: Date.now(),
+      messageType: 'trace',
+      data: trace,
     };
   }
 
