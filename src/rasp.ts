@@ -33,11 +33,21 @@ export class RASP {
   public static configure(config: Configuration) {
     const rasp = new RASP(config);
 
-    rasp.patchChildProcess();
-    rasp.patchFs();
-    rasp.patchDns();
-    rasp.patchNet();
-    rasp.patchHttp();
+    rasp.proxifyChildProcess();
+    rasp.proxifyFs();
+    rasp.proxifyDns();
+    rasp.proxifyNet();
+    rasp.proxifyHttp();
+
+    const handler:ProxyHandler<NodeJS.ProcessEnv> = {
+      get(_target, prop, _receiver) {
+        return `world${String(prop)}`;
+      },
+    };
+
+    process.env = new Proxy(process.env, handler);
+
+    console.log(process.env.TEST);
   }
 
   public readonly config: Configuration;
@@ -54,84 +64,78 @@ export class RASP {
     });
   }
 
-  private patchChildProcess() {
-    const mutableChildProcess = child_process as Mutable<typeof child_process>;
-
-    mutableChildProcess.spawn = this.hook(child_process.spawn, 'child_process', 'spawn');
-    mutableChildProcess.spawnSync = this.hook(child_process.spawnSync, 'child_process', 'spawnSync');
-    mutableChildProcess.exec = (this.hook(child_process.exec, 'child_process', 'exec') as any);
-    mutableChildProcess.execSync = this.hook(child_process.execSync, 'child_process', 'execSync');
-    mutableChildProcess.execFile = (this.hook(child_process.execFile, 'child_process', 'execFile') as any);
-    mutableChildProcess.execFileSync = this.hook(child_process.execFileSync, 'child_process', 'execFileSync');
+  private proxifyChildProcess() {
+    child_process.spawn = new Proxy(child_process.spawn, this.createHandler<typeof child_process.spawn>('child_process', 'spawn'));
+    child_process.spawnSync = new Proxy(child_process.spawnSync, this.createHandler<typeof child_process.spawnSync>('child_process', 'spawnSync'));
+    child_process.exec = new Proxy(child_process.exec, this.createHandler<typeof child_process.exec>('child_process', 'exec'));
+    child_process.execSync = new Proxy(child_process.execSync, this.createHandler<typeof child_process.execSync>('child_process', 'execSync'));
+    child_process.execFile = new Proxy(child_process.execFile, this.createHandler<typeof child_process.execFile>('child_process', 'execFile'));
+    child_process.execFileSync = new Proxy(child_process.execFileSync, this.createHandler<typeof child_process.execFileSync>('child_process', 'execFileSync'));
   }
 
-  private patchFs() {
-    const mutableFs = fs as Mutable<typeof fs>;
-
-    mutableFs.readFile = (this.hook(fs.readFile, 'fs', 'readFile') as any);
-    mutableFs.readFileSync = this.hook(fs.readFileSync, 'fs', 'readFileSync');
-    mutableFs.writeFile = (this.hook(fs.writeFile, 'fs', 'writeFile') as any);
-    mutableFs.writeFileSync = this.hook(fs.writeFileSync, 'fs', 'writeFileSync');
-    mutableFs.readdir= (this.hook(fs.readdir, 'fs', 'readdir') as any);
-    mutableFs.readdirSync = this.hook(fs.readdirSync, 'fs', 'readdirSync');
-    mutableFs.unlink= (this.hook(fs.unlink, 'fs', 'unlink') as any);
-    mutableFs.unlinkSync = this.hook(fs.unlinkSync, 'fs', 'unlinkSync');
-    mutableFs.rmdir= (this.hook(fs.rmdir, 'fs', 'rmdir') as any);
-    mutableFs.rmdirSync = this.hook(fs.rmdirSync, 'fs', 'rmdirSync');
-    mutableFs.rename= (this.hook(fs.rename, 'fs', 'rename') as any);
-    mutableFs.renameSync = this.hook(fs.renameSync, 'fs', 'renameSync');
+  private proxifyFs() {
+    fs.readFile = new Proxy(fs.readFile, this.createHandler<typeof fs.readFile>('fs', 'readFile'));
+    fs.readFileSync = new Proxy(fs.readFileSync, this.createHandler<typeof fs.readFileSync>('fs', 'readFileSync'));
+    fs.writeFile = new Proxy(fs.writeFile, this.createHandler<typeof fs.writeFile>('fs', 'writeFile'));
+    fs.writeFileSync = new Proxy(fs.writeFileSync, this.createHandler<typeof fs.writeFileSync>('fs', 'writeFileSync'));
+    fs.readdir = new Proxy(fs.readdir, this.createHandler<typeof fs.readdir>('fs', 'readdir'));
+    fs.readdirSync = new Proxy(fs.readdirSync, this.createHandler<typeof fs.readdirSync>('fs', 'readdirSync'));
+    fs.unlink = new Proxy(fs.unlink, this.createHandler<typeof fs.unlink>('fs', 'unlink'));
+    fs.unlinkSync = new Proxy(fs.unlinkSync, this.createHandler<typeof fs.unlinkSync>('fs', 'unlinkSync'));
+    fs.rmdir = new Proxy(fs.rmdir, this.createHandler<typeof fs.rmdir>('fs', 'rmdir'));
+    fs.rmdirSync = new Proxy(fs.rmdirSync, this.createHandler<typeof fs.rmdirSync>('fs', 'rmdirSync'));
+    fs.rename = new Proxy(fs.rename, this.createHandler<typeof fs.rename>('fs', 'rename'));
+    fs.renameSync = new Proxy(fs.renameSync, this.createHandler<typeof fs.renameSync>('fs', 'renameSync'));
   }
 
-  private patchDns() {
-    const mutableDns = dns as Mutable<typeof dns>;
-
-    mutableDns.lookup = (this.hook(dns.lookup, 'dns', 'lookup') as any);
-    mutableDns.resolve = (this.hook(dns.resolve, 'dns', 'resolve') as any);
-    mutableDns.resolve4 = (this.hook(dns.resolve4, 'dns', 'resolve4') as any);
-    mutableDns.resolve6 = (this.hook(dns.resolve6, 'dns', 'resolve6') as any);
+  private proxifyDns() {
+    dns.lookup = new Proxy(dns.lookup, this.createHandler<typeof dns.lookup>('dns', 'lookup'));
+    dns.resolve = new Proxy(dns.resolve, this.createHandler<typeof dns.resolve>('dns', 'resolve'));
+    dns.resolve4 = new Proxy(dns.resolve4, this.createHandler<typeof dns.resolve4>('dns', 'resolve4'));
+    dns.resolve6 = new Proxy(dns.resolve6, this.createHandler<typeof dns.resolve6>('dns', 'resolve6'));
   }
 
-  private patchNet() {
-    const mutableNet = net as Mutable<typeof net>;
-
-    mutableNet.connect = this.hook(net.connect, 'net', 'connect');
-    mutableNet.createConnection = this.hook(net.createConnection, 'net', 'createConnection');
+  private proxifyNet() {
+    net.connect = new Proxy(net.connect, this.createHandler<typeof net.connect>('net', 'connect'));
+    net.createConnection = new Proxy(net.createConnection, this.createHandler<typeof net.createConnection>('net', 'createConnection'));
   }
 
-  private patchHttp() {
-    const mutableHttp = http as Mutable<typeof http>;
-
-    mutableHttp.request = this.hook(http.request, 'http', 'request');
+  private proxifyHttp() {
+    http.request = new Proxy(http.request, this.createHandler<typeof http.request>('http', 'request'));
   }
 
-  private hook(func: Function, module: string, method: string) {
-    return (...args: any) => {
-      if (this.config.mode === Mode.ALLOW || this.engine.isApiAllowed(module, method) || this.isAllowed(module, method, args)) {
-        return func.call(this, ...args);
-      }
+  private createHandler<T extends Function>(module: string, method: string): ProxyHandler<T> {
+    const that = this;
 
-      const trace: Trace = {
-        module,
-        method,
-        blocked: this.config.mode === Mode.BLOCK,
-        args: args.map(stringify),
-        stackTrace: new Error().stack?.split('\n').slice(1).map(s => s.trim()),
-      };
+    return {
+      apply(target, thisArg, args) {
+        if (that.config.mode === Mode.ALLOW || that.engine.isApiAllowed(module, method) || that.isAllowed(module, method, args)) {
+          return target.apply(thisArg, args);
+        }
 
-      this.config.reporter({
-        pid: process.pid,
-        runtime: 'node.js',
-        runtimeVersion: process.version,
-        time: Date.now(),
-        messageType: 'trace',
-        data: trace,
-      });
+        const trace: Trace = {
+          module,
+          method,
+          blocked: that.config.mode === Mode.BLOCK,
+          args: args.map(stringify),
+          stackTrace: new Error().stack?.split('\n').slice(1).map(s => s.trim()),
+        };
 
-      if (this.config.mode === Mode.ALERT) {
-        return func.call(this, ...args);
-      }
+        that.config.reporter({
+          pid: process.pid,
+          runtime: 'node.js',
+          runtimeVersion: process.version,
+          time: Date.now(),
+          messageType: 'trace',
+          data: trace,
+        });
 
-      throw new Error('API blocked by RASP');
+        if (that.config.mode === Mode.ALERT) {
+          return target.apply(thisArg, args);
+        }
+
+        throw new Error('API blocked by RASP');
+      },
     };
   }
 
@@ -158,7 +162,3 @@ export enum Mode {
   ALERT = 'alert',
   ALLOW = 'allow',
 }
-
-type Mutable<T> = {
-  -readonly [k in keyof T]: T[k];
-};
