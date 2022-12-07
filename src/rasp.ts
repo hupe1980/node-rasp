@@ -38,7 +38,7 @@ export class RASP {
     rasp.proxifyDns();
     rasp.proxifyNet();
     rasp.proxifyHttp();
-    rasp.proxifyProcessEnv();
+    //rasp.proxifyProcessEnv();
 
     return rasp;
   }
@@ -114,40 +114,40 @@ export class RASP {
     http.request = new Proxy(http.request, this.createHandler<typeof http.request>('http', 'request'));
   }
 
-  private proxifyProcessEnv() {
-    const that = this;
+  // private proxifyProcessEnv() {
+  //   const that = this;
 
-    const handler:ProxyHandler<NodeJS.ProcessEnv> = {
-      get(target, prop, receiver) {
-        if (that.config.mode === Mode.ALLOW || that.engine.isApiAllowed('process', 'env') || that.engine.isEnvAllowed(String(prop))) {
-          return Reflect.get(target, prop, receiver);
-        }
+  //   const handler:ProxyHandler<NodeJS.ProcessEnv> = {
+  //     get(target, prop, receiver) {
+  //       if (that.config.mode === Mode.ALLOW || that.engine.isApiAllowed('process', 'env') || that.engine.isEnvAllowed(String(prop))) {
+  //         return Reflect.get(target, prop, receiver);
+  //       }
 
-        that.config.reporter(that.createMessage('process', 'env', [String(prop)]));
+  //       that.config.reporter(that.createMessage('process', 'env', [String(prop)]));
 
-        if (that.config.mode === Mode.ALERT) {
-          return Reflect.get(target, prop, receiver);
-        }
+  //       if (that.config.mode === Mode.ALERT) {
+  //         return Reflect.get(target, prop, receiver);
+  //       }
 
-        throw new Error('Environment access blocked by RASP');
-      },
-      set(target, prop, val, receiver) {
-        if (that.config.mode === Mode.ALLOW || that.engine.isApiAllowed('process', 'env') || that.engine.isEnvAllowed(String(prop))) {
-          return Reflect.set(target, prop, val, receiver);
-        }
+  //       throw new Error('Environment access blocked by RASP');
+  //     },
+  //     set(target, prop, val, receiver) {
+  //       if (that.config.mode === Mode.ALLOW || that.engine.isApiAllowed('process', 'env') || that.engine.isEnvAllowed(String(prop))) {
+  //         return Reflect.set(target, prop, val, receiver);
+  //       }
 
-        that.config.reporter(that.createMessage('process', 'env', [String(prop), val]));
+  //       that.config.reporter(that.createMessage('process', 'env', [String(prop), val]));
 
-        if (that.config.mode === Mode.ALERT) {
-          return Reflect.set(target, prop, val, receiver);
-        }
+  //       if (that.config.mode === Mode.ALERT) {
+  //         return Reflect.set(target, prop, val, receiver);
+  //       }
 
-        throw new Error('Environment access blocked by RASP');
-      },
-    };
+  //       throw new Error('Environment access blocked by RASP');
+  //     },
+  //   };
 
-    process.env = new Proxy(process.env, handler);
-  }
+  //   process.env = new Proxy(process.env, handler);
+  // }
 
   private createHandler<T extends Function>(module: string, method: string): ProxyHandler<T> {
     const that = this;

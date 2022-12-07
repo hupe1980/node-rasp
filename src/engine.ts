@@ -9,7 +9,7 @@ export interface Api {
 }
 
 export interface EngineProps {
-  readonly allowEnv?: string[];
+  //readonly allowEnv?: string[];
   readonly allowRead?: string[];
   readonly allowWrite?: string[];
   readonly allowRun?: string[];
@@ -77,11 +77,11 @@ export class Engine {
     });
   }
 
-  public isEnvAllowed(env: string): boolean {
-    if (!this.props.allowEnv) return false;
+  // public isEnvAllowed(env: string): boolean {
+  //   if (!this.props.allowEnv) return false;
 
-    return this.props.allowEnv.some(item => matchRule(env, item));
-  }
+  //   return this.props.allowEnv.some(item => matchRule(env, item));
+  // }
 
   private isReadAllowed(path: fs.PathLike): boolean {
     if (!this.props.allowRead) return false;

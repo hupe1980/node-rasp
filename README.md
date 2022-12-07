@@ -23,7 +23,6 @@ fs.readdirSync('/tmp'); // => throws API blocked by RASP
 |-|-|-
 |mode|allow, alert, block|
 |reporter|(msg: Message) => void|
-|allowEnv|string[]|Allow environment acces 
 |allowRead|string[]|Allow file system read access
 |allowWrite|string[]|Allow file system write access
 |allowRun|string[]|Allow running subprocesses

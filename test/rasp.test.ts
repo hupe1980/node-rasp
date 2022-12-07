@@ -8,13 +8,11 @@ import { Mode, RASP, Message } from '../src';
 let lookup:typeof dns.lookup;
 let readdirSync:typeof fs.readdirSync;
 let request:typeof http.request;
-let env:typeof process.env;
 
 beforeEach(() => {
   lookup = dns.lookup;
   readdirSync = fs.readdirSync;
   request = http.request;
-  env = process.env;
 
   jest.resetModules();
 });
@@ -23,7 +21,6 @@ afterEach(() => {
   dns.lookup = lookup;
   fs.readdirSync = readdirSync;
   http.request = request;
-  process.env = env;
 });
 
 test('rasp - alert - fs.readdirSync', () => {
@@ -98,9 +95,7 @@ test('rasp - block - axios', async () => {
     allowRead: ['*istanbul-reports/lib/html/*', '*node_modules/*'],
     allowApi: [
       { module: 'fs', method: 'readFileSync' },
-      { module: 'fs', method: 'openSync' },
       { module: 'fs', method: 'writeFileSync' },
-      { module: 'process', method: 'env' },
     ],
     reporter(msg: Message) {
       blocked = msg.data.blocked;
