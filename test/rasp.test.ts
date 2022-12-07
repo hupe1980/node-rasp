@@ -1,42 +1,45 @@
 import dns from 'dns';
 import fs from 'fs';
-import { Mode, RASP, Trace } from '../src';
+import http from 'http';
+
+import axios from 'axios';
+import { Mode, RASP, Message } from '../src';
 
 let lookup:typeof dns.lookup;
-let openSync:typeof fs.openSync;
 let readdirSync:typeof fs.readdirSync;
+let request:typeof http.request;
 
 beforeEach(() => {
   lookup = dns.lookup;
-  openSync = fs.openSync;
   readdirSync = fs.readdirSync;
+  request = http.request;
 
   jest.resetModules();
 });
 
 afterEach(() => {
   dns.lookup = lookup;
-  fs.openSync = openSync;
   fs.readdirSync = readdirSync;
+  http.request = request;
 });
 
-test('rasp - alert - fs.openSync', () => {
+test('rasp - alert - fs.readdirSync', () => {
   let module, method, blocked;
 
   RASP.configure({
     mode: Mode.ALERT,
-    reporter(trace: Trace) {
-      blocked = trace.blocked;
-      module = trace.module;
-      method = trace.method;
+    reporter(msg: Message) {
+      blocked = msg.data.blocked;
+      module = msg.data.module;
+      method = msg.data.method;
     },
   });
 
-  fs.openSync('/tmp/test', 'w');
+  fs.readdirSync(process.cwd());
 
   expect(blocked).toBe(false);
   expect(module).toBe('fs');
-  expect(method).toBe('openSync');
+  expect(method).toBe('readdirSync');
 });
 
 test('rasp - block - fs.readdirSync', () => {
@@ -45,15 +48,15 @@ test('rasp - block - fs.readdirSync', () => {
   RASP.configure({
     mode: Mode.BLOCK,
     allowRead: ['*istanbul-reports/lib/html/*', '*node_modules/*'],
-    ignores: [
+    allowApi: [
       { module: 'fs', method: 'readFileSync' },
       { module: 'fs', method: 'openSync' },
       { module: 'fs', method: 'writeFileSync' },
     ],
-    reporter(trace: Trace) {
-      blocked = trace.blocked;
-      module = trace.module;
-      method = trace.method;
+    reporter(msg: Message) {
+      blocked = msg.data.blocked;
+      module = msg.data.module;
+      method = msg.data.method;
     },
   });
 
@@ -70,10 +73,10 @@ test('rasp - alert - dns.lookup', () => {
 
   RASP.configure({
     mode: Mode.ALERT,
-    reporter(trace: Trace) {
-      blocked = trace.blocked;
-      module = trace.module;
-      method = trace.method;
+    reporter(msg: Message) {
+      blocked = msg.data.blocked;
+      module = msg.data.module;
+      method = msg.data.method;
     },
   });
 
@@ -82,4 +85,29 @@ test('rasp - alert - dns.lookup', () => {
   expect(blocked).toBe(false);
   expect(module).toBe('dns');
   expect(method).toBe('lookup');
+});
+
+test('rasp - block - axios', async () => {
+  let module, method, blocked;
+
+  RASP.configure({
+    mode: Mode.BLOCK,
+    allowRead: ['*istanbul-reports/lib/html/*', '*node_modules/*'],
+    allowApi: [
+      { module: 'fs', method: 'readFileSync' },
+      { module: 'fs', method: 'openSync' },
+      { module: 'fs', method: 'writeFileSync' },
+    ],
+    reporter(msg: Message) {
+      blocked = msg.data.blocked;
+      module = msg.data.module;
+      method = msg.data.method;
+    },
+  });
+
+  await expect(axios.get('http://127.0.0.1')).rejects.toThrowError('API blocked by RASP');
+
+  expect(blocked).toBe(true);
+  expect(module).toBe('http');
+  expect(method).toBe('request');
 });

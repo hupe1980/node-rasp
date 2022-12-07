@@ -1,9 +1,11 @@
 import child_process from 'child_process';
 import dns from 'dns';
 import fs from 'fs';
+import http from 'http';
 import net from 'net';
 
-import { stringify, matchRule } from './utils';
+import { Engine, EngineProps } from './engine';
+import { stringify } from './utils';
 
 export interface Trace {
   readonly module: string;
@@ -13,21 +15,18 @@ export interface Trace {
   readonly stackTrace?: string[];
 }
 
-export interface Ignore {
-  readonly module: string;
-  readonly method: string;
+export interface Message {
+  readonly pid: number;
+  readonly runtime: 'node.js';
+  readonly runtimeVersion: string;
+  readonly time: number;
+  readonly messageType: 'trace';
+  readonly data: Trace;
 }
 
-export const ReadFileIgnores = [{ module: 'fs', method: 'readFile' }, { module: 'fs', method: 'readFileSync' }];
-
-export interface Configuration {
+export interface Configuration extends EngineProps{
   readonly mode?: Mode;
-  readonly allowRead?: string[];
-  readonly allowWrite?: string[];
-  //readonly allowRun?: string[]; TODO
-  readonly allowNet?: string[];
-  readonly ignores?: Ignore[];
-  readonly reporter: (trace: Trace) => void;
+  readonly reporter: (msg: Message) => void;
 }
 
 export class RASP {
@@ -38,15 +37,21 @@ export class RASP {
     rasp.patchFs();
     rasp.patchDns();
     rasp.patchNet();
+    rasp.patchHttp();
   }
 
   public readonly config: Configuration;
+  public readonly engine: Engine;
 
   private constructor(config: Configuration) {
     this.config = {
       mode: Mode.BLOCK, // default
       ...config,
     };
+
+    this.engine = new Engine({
+      ...this.config,
+    });
   }
 
   private patchChildProcess() {
@@ -63,8 +68,6 @@ export class RASP {
   private patchFs() {
     const mutableFs = fs as Mutable<typeof fs>;
 
-    mutableFs.open = (this.hook(fs.open, 'fs', 'open') as any);
-    mutableFs.openSync = this.hook(fs.openSync, 'fs', 'openSync');
     mutableFs.readFile = (this.hook(fs.readFile, 'fs', 'readFile') as any);
     mutableFs.readFileSync = this.hook(fs.readFileSync, 'fs', 'readFileSync');
     mutableFs.writeFile = (this.hook(fs.writeFile, 'fs', 'writeFile') as any);
@@ -92,11 +95,18 @@ export class RASP {
     const mutableNet = net as Mutable<typeof net>;
 
     mutableNet.connect = this.hook(net.connect, 'net', 'connect');
+    mutableNet.createConnection = this.hook(net.createConnection, 'net', 'createConnection');
+  }
+
+  private patchHttp() {
+    const mutableHttp = http as Mutable<typeof http>;
+
+    mutableHttp.request = this.hook(http.request, 'http', 'request');
   }
 
   private hook(func: Function, module: string, method: string) {
     return (...args: any) => {
-      if (this.config.mode === Mode.ALLOW || this.isIgnored(module, method) || this.isAllowed(module, method, args)) {
+      if (this.config.mode === Mode.ALLOW || this.engine.isApiAllowed(module, method) || this.isAllowed(module, method, args)) {
         return func.call(this, ...args);
       }
 
@@ -108,7 +118,14 @@ export class RASP {
         stackTrace: new Error().stack?.split('\n').slice(1).map(s => s.trim()),
       };
 
-      this.config.reporter(trace);
+      this.config.reporter({
+        pid: process.pid,
+        runtime: 'node.js',
+        runtimeVersion: process.version,
+        time: Date.now(),
+        messageType: 'trace',
+        data: trace,
+      });
 
       if (this.config.mode === Mode.ALERT) {
         return func.call(this, ...args);
@@ -118,34 +135,21 @@ export class RASP {
     };
   }
 
-  private isIgnored(module: string, method: string): boolean {
-    const ignore = {
-      module,
-      method,
-    };
-
-    if (!this.config.ignores) return false;
-
-    return this.config.ignores.some(item => {
-      return item.module=== ignore.module && item.method === ignore.method;
-    });
-  }
-
   private isAllowed(module: string, method: string, args: any): boolean {
-    if (module === 'fs') {
-      if (method === 'readFile' || method === 'readFileSync' || method === 'readdir' || method === 'readdirSync') {
-        if (!this.config.allowRead) return false;
-        return this.config.allowRead.some(item => matchRule(args[0], item));
-      } else if (method === 'writeFile' || method === 'writeFileSync') {
-        if (!this.config.allowWrite) return false;
-        return this.config.allowWrite.some(item => matchRule(args[0], item));
-      }
-    } else if (module === 'dns') {
-      if (!this.config.allowNet) return false;
-      return this.config.allowNet.some(item => matchRule(args[0], item));
+    switch (module) {
+      case 'fs':
+        return this.engine.isFsMethodAllowed(method, args);
+      case 'dns':
+        return this.engine.isDnsMethodAllowed(method, args);
+      case 'child_process':
+        return this.engine.isChildProcessMethodAllowed(method, args);
+      case 'net':
+        return this.engine.isNetMethodAllowed(method, args);
+      case 'http':
+        return this.engine.isHttpMethodAllowed(method, args);
+      default:
+        return false;
     }
-
-    return false;
   }
 }
 

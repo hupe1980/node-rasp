@@ -6,12 +6,12 @@
 ## How to use
 ```typescript
 import fs from 'fs';
-import { Mode, RASP, Trace } from 'node-rasp';
+import { Mode, RASP, Message } from 'node-rasp';
 
 RASP.configure({
   mode: Mode.Block,
-  reporter: (trace: Trace) => {
-    console.log(trace);
+  reporter: (msg: Message) => {
+    console.log(msg);
   },
 });
 

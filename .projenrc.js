@@ -4,6 +4,7 @@ const project = new typescript.TypeScriptProject({
   name: 'node-rasp',
   license: 'MIT',
   copyrightOwner: 'Frank Hübner',
+  devDeps: ['axios'],
 });
 project.gitignore.exclude('.DS_Store');
 project.synth();
