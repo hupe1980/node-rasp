@@ -30,7 +30,7 @@ export interface Configuration extends EngineProps{
 }
 
 export class RASP {
-  public static configure(config: Configuration) {
+  public static configure(config: Configuration): RASP {
     const rasp = new RASP(config);
 
     rasp.proxifyChildProcess();
@@ -38,16 +38,9 @@ export class RASP {
     rasp.proxifyDns();
     rasp.proxifyNet();
     rasp.proxifyHttp();
+    rasp.proxifyProcessEnv();
 
-    const handler:ProxyHandler<NodeJS.ProcessEnv> = {
-      get(_target, prop, _receiver) {
-        return `world${String(prop)}`;
-      },
-    };
-
-    process.env = new Proxy(process.env, handler);
-
-    console.log(process.env.TEST);
+    return rasp;
   }
 
   public readonly config: Configuration;
@@ -102,6 +95,44 @@ export class RASP {
 
   private proxifyHttp() {
     http.request = new Proxy(http.request, this.createHandler<typeof http.request>('http', 'request'));
+  }
+
+  private proxifyProcessEnv() {
+    const that = this;
+
+    const handler:ProxyHandler<NodeJS.ProcessEnv> = {
+      get(target, prop, receiver) {
+        if (that.config.mode === Mode.ALLOW || that.engine.isApiAllowed('process', 'env') || that.engine.isEnvAllowed(String(prop))) {
+          console.log('YYYY', String(prop));
+          return Reflect.get(target, prop, receiver);
+        }
+
+        const trace: Trace = {
+          module: 'process',
+          method: 'env',
+          blocked: that.config.mode === Mode.BLOCK,
+          args: [String(prop)],
+          stackTrace: new Error().stack?.split('\n').slice(1).map(s => s.trim()),
+        };
+
+        that.config.reporter({
+          pid: process.pid,
+          runtime: 'node.js',
+          runtimeVersion: process.version,
+          time: Date.now(),
+          messageType: 'trace',
+          data: trace,
+        });
+
+        if (that.config.mode === Mode.ALERT) {
+          return Reflect.get(target, prop, receiver);
+        }
+
+        throw new Error('Environment access blocked by RASP');
+      },
+    };
+
+    process.env = new Proxy(process.env, handler);
   }
 
   private createHandler<T extends Function>(module: string, method: string): ProxyHandler<T> {

@@ -9,6 +9,7 @@ export interface Api {
 }
 
 export interface EngineProps {
+  readonly allowEnv?: string[];
   readonly allowRead?: string[];
   readonly allowWrite?: string[];
   readonly allowRun?: string[];
@@ -63,6 +64,8 @@ export class Engine {
       return `${opts.protocol}//${opts.hostname || opts.host}${port}${opts.path}`;
     })();
 
+    console.log(strUrl);
+
     return this.props.allowNet.some(item => matchRule(strUrl, item));
   }
 
@@ -72,6 +75,12 @@ export class Engine {
     return this.props.allowApi.some(item => {
       return item.module=== module && item.method === method;
     });
+  }
+
+  public isEnvAllowed(env: string): boolean {
+    if (!this.props.allowEnv) return false;
+
+    return this.props.allowEnv.some(item => matchRule(env, item));
   }
 
   private isReadAllowed(path: fs.PathLike): boolean {
