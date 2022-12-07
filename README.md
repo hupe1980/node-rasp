@@ -15,8 +15,20 @@ RASP.configure({
   },
 });
 
-fs.openSync('/tmp/test', 'w'); // => throws API blocked by RASP
+fs.readdirSync('/tmp'); // => throws API blocked by RASP
 ```
+
+## Configuration
+|Name|Type|Description
+|-|-|-
+|mode|allow, alert, block|
+|reporter|(msg: Message) => void|
+|allowEnv|string[]|Allow environment acces 
+|allowRead|string[]|Allow file system read access
+|allowWrite|string[]|Allow file system write access
+|allowRun|string[]|Allow running subprocesses
+|allowNet|string[]|Allow network access
+|allowApi|{ module: string, method: string }|Allow api calls
 
 ## License
 [MIT](LICENCE)
