@@ -12,6 +12,7 @@ export interface EngineProps {
   //readonly allowEnv?: string[];
   readonly allowRead?: string[];
   readonly allowWrite?: string[];
+  readonly allowDelete?: string[];
   readonly allowRun?: string[];
   readonly allowNet?: string[];
   readonly allowApi?: Api[];
@@ -25,8 +26,12 @@ export class Engine {
       return this.isReadAllowed(args[0]);
     }
 
-    if (method === 'writeFile' || method === 'writeFileSync') {
+    if (method === 'writeFile' || method === 'writeFileSync' || method === 'mkdir' || method === 'mkdirSync') {
       return this.isWriteAllowed(args[0]);
+    }
+
+    if (method === 'unlink' || method === 'unlinkSync' || method === 'rmdir' || method === 'rmdirSync') {
+      return this.isDeleteAllowed(args[0]);
     }
 
     return false;
@@ -64,8 +69,6 @@ export class Engine {
       return `${opts.protocol}//${opts.hostname || opts.host}${port}${opts.path}`;
     })();
 
-    console.log(strUrl);
-
     return this.props.allowNet.some(item => matchRule(strUrl, item));
   }
 
@@ -85,6 +88,7 @@ export class Engine {
 
   private isReadAllowed(path: fs.PathLike): boolean {
     if (!this.props.allowRead) return false;
+
     const strPath = (() => {
       if (typeof path === 'string') return path;
       return path.toString();
@@ -95,11 +99,23 @@ export class Engine {
 
   private isWriteAllowed(path: fs.PathLike): boolean {
     if (!this.props.allowWrite) return false;
+
     const strPath = (() => {
       if (typeof path === 'string') return path;
       return path.toString();
     })();
 
     return this.props.allowWrite.some(item => matchRule(strPath, item));
+  }
+
+  private isDeleteAllowed(path: fs.PathLike): boolean {
+    if (!this.props.allowDelete) return false;
+
+    const strPath = (() => {
+      if (typeof path === 'string') return path;
+      return path.toString();
+    })();
+
+    return this.props.allowDelete.some(item => matchRule(strPath, item));
   }
 }

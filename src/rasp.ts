@@ -26,11 +26,11 @@ export interface Message {
 
 export interface Configuration extends EngineProps{
   readonly mode?: Mode;
-  readonly reporter: (msg: Message) => void;
+  readonly reporter: (msg: Message, rasp: RASP) => void;
 }
 
 export class RASP {
-  public static configure(config: Configuration): RASP {
+  public static configure(config: Configuration) {
     const rasp = new RASP(config);
 
     rasp.proxifyChildProcess();
@@ -39,8 +39,6 @@ export class RASP {
     rasp.proxifyNet();
     rasp.proxifyHttp();
     //rasp.proxifyProcessEnv();
-
-    return rasp;
   }
 
   private readonly config: Configuration;
@@ -90,6 +88,8 @@ export class RASP {
     fs.writeFileSync = new Proxy(fs.writeFileSync, this.createHandler<typeof fs.writeFileSync>('fs', 'writeFileSync'));
     fs.readdir = new Proxy(fs.readdir, this.createHandler<typeof fs.readdir>('fs', 'readdir'));
     fs.readdirSync = new Proxy(fs.readdirSync, this.createHandler<typeof fs.readdirSync>('fs', 'readdirSync'));
+    fs.mkdir = new Proxy(fs.mkdir, this.createHandler<typeof fs.mkdir>('fs', 'mkdir'));
+    fs.mkdirSync = new Proxy(fs.mkdirSync, this.createHandler<typeof fs.mkdirSync>('fs', 'mkdirSync'));
     fs.unlink = new Proxy(fs.unlink, this.createHandler<typeof fs.unlink>('fs', 'unlink'));
     fs.unlinkSync = new Proxy(fs.unlinkSync, this.createHandler<typeof fs.unlinkSync>('fs', 'unlinkSync'));
     fs.rmdir = new Proxy(fs.rmdir, this.createHandler<typeof fs.rmdir>('fs', 'rmdir'));
@@ -158,13 +158,13 @@ export class RASP {
           return Reflect.apply(target, thisArg, args);
         }
 
-        that.config.reporter(that.createMessage(module, method, args.map(stringify)));
+        that.config.reporter(that.createMessage(module, method, args.map(stringify)), that);
 
         if (that.config.mode === Mode.ALERT) {
           return Reflect.apply(target, thisArg, args);
         }
 
-        throw new Error('API blocked by RASP');
+        throw new Error(`${module}.${method} blocked by RASP`);
       },
     };
   }
