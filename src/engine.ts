@@ -9,6 +9,7 @@ export interface Api {
 }
 
 export interface EngineProps {
+  readonly mode?: Mode;
   //readonly allowEnv?: string[];
   readonly allowRead?: string[];
   readonly allowWrite?: string[];
@@ -19,7 +20,25 @@ export interface EngineProps {
 }
 
 export class Engine {
-  constructor(private readonly props: EngineProps) {}
+  private props: EngineProps;
+
+  constructor(props: EngineProps) {
+    this.props = {
+      mode: Mode.BLOCK, // default
+      ...props,
+    };
+  }
+
+  public update(props: EngineProps) {
+    this.props = {
+      ...this.props,
+      ...props,
+    };
+  }
+
+  public get mode(): Mode {
+    return this.props.mode || Mode.BLOCK;
+  }
 
   public isFsMethodAllowed(method: string, args: any) {
     if (method === 'readFile' || method === 'readFileSync' || method === 'readdir' || method === 'readdirSync') {
@@ -118,4 +137,10 @@ export class Engine {
 
     return this.props.allowDelete.some(item => matchRule(strPath, item));
   }
+}
+
+export enum Mode {
+  BLOCK = 'block',
+  ALERT = 'alert',
+  ALLOW = 'allow',
 }

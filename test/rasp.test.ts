@@ -108,3 +108,18 @@ test('rasp - block - axios', async () => {
   expect(module).toBe('http');
   expect(method).toBe('request');
 });
+
+test('rasp - alert -> block - dns.lookup', async () => {
+  RASP.configure({
+    mode: Mode.ALERT,
+    reporter(msg: Message, rasp: RASP) {
+      if (msg.data.module === 'dns' && msg.data.method === 'lookup') {
+        rasp.updateEngine({ mode: Mode.BLOCK });
+      }
+    },
+  });
+
+  dns.lookup('example.com', () => {}); // ok => updateEngine
+
+  expect(() => dns.lookup('example.com', () => {})).toThrowError('dns.lookup blocked by RASP');
+});

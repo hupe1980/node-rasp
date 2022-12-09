@@ -19,7 +19,7 @@ fs.readdirSync('/tmp'); // => throws fs.readdirSync blocked by RASP
 ```
 
 ## Example Message
-```json
+```
 {
   pid: 20448,
   runtime: 'node.js',

@@ -4,7 +4,7 @@ import fs from 'fs';
 import http from 'http';
 import net from 'net';
 
-import { Engine, EngineProps } from './engine';
+import { Engine, EngineProps, Mode } from './engine';
 import { stringify } from './utils';
 
 export interface Trace {
@@ -25,7 +25,6 @@ export interface Message {
 }
 
 export interface Configuration extends EngineProps{
-  readonly mode?: Mode;
   readonly reporter: (msg: Message, rasp: RASP) => void;
 }
 
@@ -46,13 +45,16 @@ export class RASP {
 
   private constructor(config: Configuration) {
     this.config = {
-      mode: Mode.BLOCK, // default
       ...config,
     };
 
     this.engine = new Engine({
       ...this.config,
     });
+  }
+
+  public updateEngine(props: EngineProps): void {
+    this.engine.update(props);
   }
 
   public isAllowed(module: string, method: string, args: any): boolean {
@@ -154,13 +156,15 @@ export class RASP {
 
     return {
       apply(target, thisArg, args) {
-        if (that.config.mode === Mode.ALLOW || that.engine.isApiAllowed(module, method) || that.isAllowed(module, method, args)) {
+        const mode = that.engine.mode;
+
+        if (mode === Mode.ALLOW || that.engine.isApiAllowed(module, method) || that.isAllowed(module, method, args)) {
           return Reflect.apply(target, thisArg, args);
         }
 
         that.config.reporter(that.createMessage(module, method, args.map(stringify)), that);
 
-        if (that.config.mode === Mode.ALERT) {
+        if (mode === Mode.ALERT) {
           return Reflect.apply(target, thisArg, args);
         }
 
@@ -170,12 +174,17 @@ export class RASP {
   }
 
   private createMessage(module: string, method: string, args: string[]): Message {
+    const stackTrace = new Error().stack?.split('\n').slice(1).map(s => s.trim());
+
     const trace: Trace = {
       module,
       method,
       blocked: this.config.mode === Mode.BLOCK,
       args: args,
-      stackTrace: new Error().stack?.split('\n').slice(1).map(s => s.trim()),
+      // ignore first two entries:
+      // -> 'at RASP.createMessage (/.../node_modules/node-rasp/lib/rasp.js:133:31)'
+      // -> 'at Object.apply (/.../node_modules/node-rasp/lib/rasp.js:118:43)'
+      stackTrace: stackTrace?.slice(2),
     };
 
     return {
@@ -187,10 +196,4 @@ export class RASP {
       data: trace,
     };
   }
-}
-
-export enum Mode {
-  BLOCK = 'block',
-  ALERT = 'alert',
-  ALLOW = 'allow',
 }
