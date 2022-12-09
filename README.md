@@ -32,8 +32,6 @@ fs.readdirSync('/tmp'); // => throws fs.readdirSync blocked by RASP
     blocked: false,
     args: [ '/tmp' ],
     stackTrace: [
-      'at RASP.createMessage (/.../node_modules/node-rasp/lib/rasp.js:133:31)',
-      'at Object.apply (/.../node_modules/node-rasp/lib/rasp.js:118:43)',
       'at Object.<anonymous> (/.../index.js:10:8)',
       'at Module._compile (node:internal/modules/cjs/loader:1101:14)',
       'at Object.Module._extensions..js (node:internal/modules/cjs/loader:1153:10)',
