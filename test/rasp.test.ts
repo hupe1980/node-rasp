@@ -114,7 +114,7 @@ test('rasp - alert -> block - dns.lookup', async () => {
     mode: Mode.ALERT,
     reporter(msg: Message, rasp: RASP) {
       if (msg.data.module === 'dns' && msg.data.method === 'lookup') {
-        rasp.updateEngine({ mode: Mode.BLOCK });
+        rasp.setMode(Mode.BLOCK);
       }
     },
   });

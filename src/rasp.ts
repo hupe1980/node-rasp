@@ -2,10 +2,11 @@ import child_process from 'child_process';
 import dns from 'dns';
 import fs from 'fs';
 import http from 'http';
+import https from 'https';
 import net from 'net';
 
-import { Engine, EngineProps, Mode } from './engine';
-import { stringify } from './utils';
+import { ArgProcessorFunc, requestOptionsProcessor, netConnectOptionsProcessor } from './arg_processors';
+import { Engine, Rules, Mode } from './engine';
 
 export interface Trace {
   readonly module: string;
@@ -24,54 +25,58 @@ export interface Message {
   readonly data: Trace;
 }
 
-export interface Configuration extends EngineProps{
-  readonly reporter: (msg: Message, rasp: RASP) => void;
+export type PreArgProcessorFunc = (module: string, method: string, strArgs: string[], mode: Mode, rasp: RASP) => Mode;
+export type ReporterFunc = (msg: Message, rasp: RASP) => void;
+
+export interface Configuration extends Rules{
+  readonly mode?: Mode;
+  readonly preProcessor?: PreArgProcessorFunc;
+  readonly reporter?: ReporterFunc;
 }
 
 export class RASP {
   public static configure(config: Configuration) {
-    const rasp = new RASP(config);
+    const rasp = new RASP({
+      ...config,
+    });
 
     rasp.proxifyChildProcess();
     rasp.proxifyFs();
     rasp.proxifyDns();
     rasp.proxifyNet();
     rasp.proxifyHttp();
-    //rasp.proxifyProcessEnv();
+    rasp.proxifyHttps();
   }
 
-  private readonly config: Configuration;
+  private readonly preProcessor: PreArgProcessorFunc;
+  private readonly reporter: ReporterFunc;
   private readonly engine: Engine;
 
   private constructor(config: Configuration) {
-    this.config = {
-      ...config,
-    };
+    this.preProcessor = config.preProcessor ?
+      config.preProcessor
+      :
+      (_module: string, _method: string, _argArray: any[], mode: Mode, _rasp: RASP) => mode;
 
-    this.engine = new Engine({
-      ...this.config,
+    this.reporter = config.reporter ? config.reporter : (msg: Message, _rasp: RASP) => console.log(msg);
+
+    const mode = config.mode ? config.mode : Mode.BLOCK; //default Mode.Block
+
+    this.engine = new Engine(mode, {
+      ...config,
     });
   }
 
-  public updateEngine(props: EngineProps): void {
-    this.engine.update(props);
+  public setMode(mode: Mode): void {
+    this.engine.setMode(mode);
+  }
+
+  public updateRules(rules: Rules): void {
+    this.engine.update(rules);
   }
 
   public isAllowed(module: string, method: string, args: any): boolean {
-    switch (module) {
-      case 'fs':
-        return this.engine.isFsMethodAllowed(method, args);
-      case 'dns':
-        return this.engine.isDnsMethodAllowed(method, args);
-      case 'child_process':
-        return this.engine.isChildProcessMethodAllowed(method, args);
-      case 'net':
-        return this.engine.isNetMethodAllowed(method, args);
-      case 'http':
-        return this.engine.isHttpMethodAllowed(method, args);
-      default:
-        return false;
-    }
+    return this.engine.isAllowed(module, method, args);
   }
 
   private proxifyChildProcess() {
@@ -108,92 +113,82 @@ export class RASP {
   }
 
   private proxifyNet() {
-    net.connect = new Proxy(net.connect, this.createHandler<typeof net.connect>('net', 'connect'));
-    net.createConnection = new Proxy(net.createConnection, this.createHandler<typeof net.createConnection>('net', 'createConnection'));
+    net.connect = new Proxy(net.connect, this.createHandler<typeof net.connect>('net', 'connect', { 0: netConnectOptionsProcessor }));
+    net.createConnection = new Proxy(net.createConnection, this.createHandler<typeof net.createConnection>('net', 'createConnection', { 0: netConnectOptionsProcessor }));
   }
 
   private proxifyHttp() {
-    http.request = new Proxy(http.request, this.createHandler<typeof http.request>('http', 'request'));
+    http.request = new Proxy(http.request, this.createHandler<typeof http.request>('http', 'request', { 0: requestOptionsProcessor }));
   }
 
-  // private proxifyProcessEnv() {
-  //   const that = this;
+  private proxifyHttps() {
+    https.request = new Proxy(https.request, this.createHandler<typeof https.request>('https', 'request', { 0: requestOptionsProcessor }));
+  }
 
-  //   const handler:ProxyHandler<NodeJS.ProcessEnv> = {
-  //     get(target, prop, receiver) {
-  //       if (that.config.mode === Mode.ALLOW || that.engine.isApiAllowed('process', 'env') || that.engine.isEnvAllowed(String(prop))) {
-  //         return Reflect.get(target, prop, receiver);
-  //       }
+  private createHandler<T extends Function>(module: string, method: string, processors?: Record<number, ArgProcessorFunc>): ProxyHandler<T> {
+    const stringify = (obj: any, index: number): string => {
+      if (processors && index in processors) {
+        const result = processors[index](obj);
 
-  //       that.config.reporter(that.createMessage('process', 'env', [String(prop)]));
-
-  //       if (that.config.mode === Mode.ALERT) {
-  //         return Reflect.get(target, prop, receiver);
-  //       }
-
-  //       throw new Error('Environment access blocked by RASP');
-  //     },
-  //     set(target, prop, val, receiver) {
-  //       if (that.config.mode === Mode.ALLOW || that.engine.isApiAllowed('process', 'env') || that.engine.isEnvAllowed(String(prop))) {
-  //         return Reflect.set(target, prop, val, receiver);
-  //       }
-
-  //       that.config.reporter(that.createMessage('process', 'env', [String(prop), val]));
-
-  //       if (that.config.mode === Mode.ALERT) {
-  //         return Reflect.set(target, prop, val, receiver);
-  //       }
-
-  //       throw new Error('Environment access blocked by RASP');
-  //     },
-  //   };
-
-  //   process.env = new Proxy(process.env, handler);
-  // }
-
-  private createHandler<T extends Function>(module: string, method: string): ProxyHandler<T> {
-    const that = this;
-
-    return {
-      apply(target, thisArg, args) {
-        const mode = that.engine.mode;
-
-        if (mode === Mode.ALLOW || that.engine.isApiAllowed(module, method) || that.isAllowed(module, method, args)) {
-          return Reflect.apply(target, thisArg, args);
+        if (result) {
+          return result;
         }
+      }
 
-        that.config.reporter(that.createMessage(module, method, args.map(stringify)), that);
-
-        if (mode === Mode.ALERT) {
-          return Reflect.apply(target, thisArg, args);
-        }
-
-        throw new Error(`${module}.${method} blocked by RASP`);
-      },
+      switch (typeof obj) {
+        case 'object':
+          if (obj === null) {
+            return 'null';
+          }
+          return `object ${obj.constructor.name}`;
+        case 'function':
+          return `function ${obj.name}`;
+        case 'undefined':
+          return 'undefined';
+        default:
+          return obj.toString();
+      }
     };
-  }
 
-  private createMessage(module: string, method: string, args: string[]): Message {
-    const stackTrace = new Error().stack?.split('\n').slice(1).map(s => s.trim());
+    const apply = (target: T, thisArg: any, argArray: any[]): any => {
+      const strArgs = argArray.map(stringify);
+      const mode = this.preProcessor(module, method, strArgs, this.engine.getMode(module, method, strArgs), this);
 
-    const trace: Trace = {
-      module,
-      method,
-      blocked: this.config.mode === Mode.BLOCK,
-      args: args,
-      // ignore first two entries:
-      // -> 'at RASP.createMessage (/.../node_modules/node-rasp/lib/rasp.js:133:31)'
-      // -> 'at Object.apply (/.../node_modules/node-rasp/lib/rasp.js:118:43)'
-      stackTrace: stackTrace?.slice(2),
+      if (mode === Mode.ALLOW) {
+        return Reflect.apply(target, thisArg, argArray);
+      }
+
+      const stackTrace = new Error().stack?.split('\n').slice(1).map(s => s.trim());
+
+      const trace: Trace = {
+        module,
+        method,
+        blocked: mode === Mode.BLOCK,
+        args: strArgs,
+        // ignore first entry:
+        // -> 'at Object.apply (/.../node_modules/node-rasp/lib/rasp.js:118:43)'
+        stackTrace: stackTrace ? stackTrace.slice(1) : ['no stack trace'],
+      };
+
+      this.reporter({
+        pid: process.pid,
+        runtime: 'node.js',
+        runtimeVersion: process.version,
+        time: Date.now(),
+        messageType: 'trace',
+        data: trace,
+      }, this);
+
+      if (mode === Mode.ALERT) {
+        return Reflect.apply(target, thisArg, argArray);
+      }
+
+      // mode === Mode.Block
+      throw new Error(`${module}.${method} blocked by RASP`);
     };
 
     return {
-      pid: process.pid,
-      runtime: 'node.js',
-      runtimeVersion: process.version,
-      time: Date.now(),
-      messageType: 'trace',
-      data: trace,
+      apply: apply.bind(this),
     };
   }
 }

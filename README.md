@@ -48,6 +48,7 @@ fs.readdirSync('/tmp'); // => throws fs.readdirSync blocked by RASP
 |Name|Type|Description
 |-|-|-
 |mode|allow, alert, block|
+|preProcessor|(module: string, method: string, strArgs: string[], mode: Mode, rasp: RASP) => Mode|
 |reporter|(msg: Message, rasp: RASP) => void|
 |allowRead|string[]|Allow file system read access
 |allowWrite|string[]|Allow file system write access
